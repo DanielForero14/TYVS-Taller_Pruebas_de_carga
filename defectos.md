@@ -45,3 +45,13 @@ Proyecto: Pruebas de Carga y Rendimiento
 - **Abierto** → El defecto aún no se corrige.
 - **En progreso** → El defecto está siendo trabajado.
 - **Resuelto** → El defecto fue corregido y validado con pruebas.
+
+### Defecto PERF-04
+
+- **Caso de prueba**: Pipeline CI (`perf-tests`), paso "Verificación de resultado de negocio"
+- **Entrada**: `register_voter_k6.js` ejecutado contra el mismo servicio donde ya corrió el baseline
+- **Resultado esperado**: `register_failed` < 1 %
+- **Resultado obtenido**: `register_failed` = 65 %, umbral cruzado, exit code 99
+- **Causa probable**: estado de prueba. Los ids del baseline ya existían en H2 y devolvían `DUPLICATED`
+- **Corrección**: se agregó `--env ID_BASE=700000000` al paso. Nuevo run en verde
+- **Estado**: Resuelto
