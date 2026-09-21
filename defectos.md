@@ -1,129 +1,47 @@
-# Registro de Defectos — EJEMPLO DEL PROFESOR
+﻿# Registro de Defectos
 
-
-> **Este archivo es un ejemplo**, no su entrega. Las cifras que aparecen abajo son ilustrativas: no provienen de una corrida real de este repositorio. Para su taller parta de [`defectos_template.md`](defectos_template.md) y documente los defectos con **sus propias mediciones**.
-
-Curso: Testing y Validación de Software\
-Proyecto: Pruebas de Carga y Rendimiento\
-Equipo: \[Nombre del equipo\]\
-Fecha: \[Fecha\]
-
-------------------------------------------------------------------------
-
-## Introducción
-
-Este documento recopila los defectos identificados durante la ejecución
-de pruebas de rendimiento (Baseline, Load, Stress, Spike, Soak y
-Regresión).\
-Cada defecto se documenta para garantizar trazabilidad, análisis técnico
-y propuesta de mejora.
-
-------------------------------------------------------------------------
+Curso: Testing y Validación de Software
+Proyecto: Pruebas de Carga y Rendimiento
 
 ## Formato 1: Lista detallada
 
-## Defecto PERF-01 --- Incumplimiento de SLO de latencia bajo Load
+### Defecto PERF-01
 
--   Capa afectada: Aplicación / Base de datos\
--   Escenario: Load Test (200 VUs)\
--   SLO definido: p95 \< 300 ms\
--   Resultado esperado: Cumplimiento del SLO bajo carga nominal.\
--   Resultado obtenido: p95 = 612 ms
+- **Caso de prueba**: Escenario `stress` (200→600 VUs, 10 min) con `register_person_k6.js`
+- **Entrada**: POST /register con ids generados por `__VU * 1000000 + __ITER`
+- **Resultado esperado**: `register_failed` < 1 % y respuesta `VALID` en todas las peticiones
+- **Resultado obtenido**: `register_failed` = 0,22 % (respuestas `DUPLICATED` con status 200). p95 = 0,56 ms; `http_req_failed` = 0 %
+- **Causa probable**: estado de prueba. El servicio con H2 en memoria conserva los ids registrados y el script repite ids al iniciar VUs (regla 04 del taller)
+- **Estado**: Abierto
 
-### Evidencia
+### Defecto PERF-02
 
-http_req_duration: avg=402ms\
-p(95)=612ms\
-p(99)=890ms
+- **Caso de prueba**: Escenarios `load` y `stress` sin pausas de usuario (`SLEEP_MS=0`)
+- **Entrada**: 200 y 600 VUs sin `sleep`
+- **Resultado esperado**: el servicio atiende la carga sin errores de conexión
+- **Resultado obtenido**: `connection refused` a los ~156 s con 200 VUs; corrida inválida
+- **Causa probable**: sin think time el inyector satura el equipo local (k6 y servicio comparten CPU). Se corrigió con `SLEEP_MS=100`
+- **Estado**: Resuelto
 
-### Impacto
+### Defecto PERF-03
 
-Incumplimiento del objetivo de nivel de servicio bajo carga esperada.
+- **Caso de prueba**: Código de `RegistryRepository.getConnection()`
+- **Entrada**: cada petición ejecuta `existsById` y `save`
+- **Resultado esperado**: reutilizar conexiones mediante un pool
+- **Resultado obtenido**: se abre una conexión nueva por operación (dos por petición) con `DriverManager`. No se midió su efecto en este equipo
+- **Causa probable**: ausencia de pool de conexiones (HikariCP)
+- **Estado**: Abierto
 
-### Causa probable
+## Formato 2: Tabla de defectos
 
--   Saturación del pool de conexiones.\
--   Consulta sin índice.
-
-### Estado
-
-Abierto
-
-### Prioridad
-
-Alta
-
-------------------------------------------------------------------------
-
-## Defecto PERF-02 --- Error rate elevado bajo Stress
-
--   Capa afectada: Servidor de aplicación\
--   Escenario: Stress Test (600 VUs)\
--   SLO definido: Error rate \< 1%\
--   Resultado obtenido: 3.8%
-
-### Evidencia
-
-http_req_failed: 3.8%\
-status=500 detectado
-
-### Impacto
-
-Fallas del sistema bajo carga alta.
-
-### Causa probable
-
--   Agotamiento de threads.\
--   Configuración insuficiente.
-
-### Estado
-
-En progreso
-
-### Prioridad
-
-Crítica
-
-------------------------------------------------------------------------
-
-## Defecto PERF-03 --- Degradación progresiva en Soak Test
-
--   Capa afectada: JVM / Memoria\
--   Escenario: Soak Test (2 horas)\
--   Resultado esperado: Latencia estable\
--   Resultado obtenido: Incremento progresivo de 210ms a 480ms
-
-### Impacto
-
-Posible fuga de memoria o acumulación de recursos.
-
-### Estado
-
-Abierto
-
-### Prioridad
-
-Media
-
-------------------------------------------------------------------------
-
-## Formato 2: Tabla de seguimiento
-
-| ID | Escenario | Resultado esperado | Resultado obtenido | Estado | Prioridad |
-|----|-----------|--------------------|--------------------|--------|-----------|
-| PERF-01 | Load | p95 < 300 ms | 612 ms | Abierto | Alta |
-| PERF-02 | Stress | Error < 1% | 3.8% | En progreso | Crítica |
-| PERF-03 | Soak | Latencia estable | Degradación progresiva | Abierto | Media |
-
-------------------------------------------------------------------------
+| ID | Caso de Prueba | Entrada | Resultado Esperado | Resultado Obtenido | Causa Probable | Estado |
+|----|----------------|---------|--------------------|--------------------|----------------|--------|
+| PERF-01 | stress 600 VUs | ids por VU/iteración | register_failed < 1 % | 0,22 % DUPLICATED | Estado de prueba (ids repetidos) | Abierto |
+| PERF-02 | load/stress sin pausas | SLEEP_MS=0 | Sin errores de conexión | connection refused a 156 s | Inyector saturando el equipo | Resuelto |
+| PERF-03 | RegistryRepository | 2 operaciones por petición | Uso de pool | Conexión nueva por operación | Sin pool de conexiones | Abierto |
 
 ## Convenciones de Estado
 
-Abierto: Defecto identificado sin corrección aplicada.\
-En progreso: En proceso de corrección.\
-Resuelto: Corregido y validado con nuevas pruebas.
-
-------------------------------------------------------------------------
-
-Universidad de La Sabana -- Facultad de Ingeniería\
-Curso: Testing y Validación de Software (2025-1)
+- **Abierto** → El defecto aún no se corrige.
+- **En progreso** → El defecto está siendo trabajado.
+- **Resuelto** → El defecto fue corregido y validado con pruebas.
