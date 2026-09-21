@@ -70,6 +70,7 @@ jobs:
       - name: VerificaciÃ³n de resultado de negocio
         run: |
           k6 run perf/scripts/register_voter_k6.js \
+            --env ID_BASE=700000000 \
             --env BASE_URL=http://localhost:8080 \
             --env SCENARIO=baseline \
             --duration 60s --vus 20
@@ -87,4 +88,5 @@ jobs:
           # una corrida de segundos puede pesar cientos de megabytes.
           path: perf/results/summary-*.json
           if-no-files-found: warn
+
 
